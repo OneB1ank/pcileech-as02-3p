@@ -1,0 +1,45 @@
+diff --git a/leechcore/device_fpga.c b/leechcore/device_fpga.c
+index b10083b..ba18268 100644
+--- a/leechcore/device_fpga.c
++++ b/leechcore/device_fpga.c
+@@ -5147,6 +5147,20 @@ BOOL DeviceFPGA_SetOption_DoLock(_In_ PLC_CONTEXT ctxLC, _In_ QWORD fOption, _In
+ #define FPGA_PARAMETER_ALGO_SYNCHRONOUS         0x02
+ #define FPGA_PARAMETER_ALGO_OLDASYNCHRONOUS     0x04
+ 
++/*
++ * AS02MC04 integration build:
++ *
++ * Define AS02_DEFAULT_RAWUDP when producing the AS02 host DLL.  A plain
++ * `fpga` device string then selects the board's RawUDP endpoint, while the
++ * explicit `ip=` parameter remains supported and explicit FT601/driver
++ * parameters retain the upstream transport selection.
++ */
++#ifdef AS02_DEFAULT_RAWUDP
++#ifndef AS02_DEFAULT_RAWUDP_IP
++#define AS02_DEFAULT_RAWUDP_IP "192.168.0.222"
++#endif
++#endif
++
+ _Success_(return)
+ BOOL DeviceFPGA_Open(_Inout_ PLC_CONTEXT ctxLC, _Out_opt_ PPLC_CONFIG_ERRORINFO ppLcCreateErrorInfo)
+ {
+@@ -5178,8 +5192,19 @@ BOOL DeviceFPGA_Open(_Inout_ PLC_CONTEXT ctxLC, _Out_opt_ PPLC_CONFIG_ERRORINFO
+     } else {
+         fCustomDriver = LcDeviceParameterGetNumeric(ctxLC, FPGA_PARAMETER_DRIVER) ? TRUE : FALSE;
+         fFT601 = LcDeviceParameterGetNumeric(ctxLC, FPGA_PARAMETER_FT601) ? TRUE : FALSE;
++#ifdef AS02_DEFAULT_RAWUDP
++        if(!fCustomDriver && !fFT601) {
++            dwIpAddr = inet_addr(AS02_DEFAULT_RAWUDP_IP);
++            szDeviceError = ((dwIpAddr == 0) || (dwIpAddr == (DWORD)-1)) ?
++                "Bad AS02 default IPv4 address" :
++                DeviceFPGA_InitializeUDP(ctx, dwIpAddr);
++        } else {
++            szDeviceError = DeviceFPGA_InitializeFT601(ctx, fFT601, fCustomDriver);
++        }
++#else
+         if(!fCustomDriver && !fFT601) { fCustomDriver = TRUE; fFT601 = TRUE; }
+         szDeviceError = DeviceFPGA_InitializeFT601(ctx, fFT601, fCustomDriver);
++#endif
+     }
+     if(szDeviceError) { goto fail; }
+     ctx->fPerformance = LcDeviceParameterGetNumeric(ctxLC, FPGA_PARAMETER_PERFORMANCE) ? TRUE : FALSE;

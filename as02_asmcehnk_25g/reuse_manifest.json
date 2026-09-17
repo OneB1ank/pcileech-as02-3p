@@ -1,0 +1,23 @@
+{
+  "schema": "as02-framework-reuse-v1",
+  "source_snapshot": "xcku3p/codex-as02-final-recheck@fc2cc50c4c63bdeaa2da6fdac724b44a9f8616b1",
+  "description": "Files kept byte-identical from the AMDUSB4/asmcehnk framework during the AS02 migration.",
+  "files": [
+    {
+      "path": "src/asmcehnk_header.svh",
+      "sha256": "FDCE93F2D7C7FEC3DEBE0145D6956E68818FE231768006ECDAE6D0D34C06FD0D"
+    },
+    {
+      "path": "src/asmcehnk_tlps128_bar_controller.sv",
+      "sha256": "39FFC60A7E2BDF489F23256A55CF0DC1F5FE69B47F2A28F0AB49B42EC800E8B1"
+    },
+    {
+      "path": "src/asmcehnk_tlps128_cfgspace_shadow.sv",
+      "sha256": "AC8A758882F54FBE20839061157498BD80896038CED7CE87DA250792FDF30513"
+    },
+    {
+      "path": "src/asmcehnk_pcie_cfgspace_shadow.sv",
+      "sha256": "2F487BA5BF73EAB48866A3E189B125C89ED02D9EC6520AF688C1A4405E9FD895"
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+name: source-audit
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  host-and-source:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Host RawUDP unit tests
+        working-directory: as02_asmcehnk_25g
+        run: python -m unittest -v tests.test_as02_udp_stress
+      - name: Source, transport, identity, and reuse audit
+        shell: pwsh
+        working-directory: as02_asmcehnk_25g
+        run: ./tests/test_transport_identity_reuse.ps1

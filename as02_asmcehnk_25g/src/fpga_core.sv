@@ -1,0 +1,796 @@
+// SPDX-License-Identifier: MIT
+/*
+
+Copyright (c) 2014-2025 FPGA Ninja, LLC
+
+Authors:
+- Alex Forencich
+
+*/
+
+`resetall
+`timescale 1ns / 1ps
+`default_nettype none
+
+/*
+ * FPGA core logic
+ */
+module fpga_core #
+(
+    // simulation (set to avoid vendor primitives)
+    parameter logic SIM = 1'b0,
+    // vendor ("GENERIC", "XILINX", "ALTERA")
+    parameter string VENDOR = "XILINX",
+    // device family
+    parameter string FAMILY = "kintexuplus",
+
+    // asmcehnk-visible command/config-space identity and UDP transport.
+    parameter PARAM_DEVICE_ID = 8'd5,
+    parameter PARAM_VERSION_NUMBER_MAJOR = 8'd4,
+    parameter PARAM_VERSION_NUMBER_MINOR = 8'd13,
+    parameter PARAM_CUSTOM_VALUE = 32'hffffffff,
+    parameter logic [47:0] PARAM_LOCAL_MAC = 48'h02_00_00_00_00_de,
+    parameter logic [31:0] PARAM_LOCAL_IP  = 32'hc0a800de,
+    parameter logic [15:0] PARAM_UDP_PORT  = 16'h6f3a,
+
+    // PTP configuration
+    parameter logic PTP_TS_EN = 1'b0,
+
+    // PCIe interface configuration
+    parameter RQ_SEQ_NUM_W = 6,
+
+    // AXI lite interface configuration (control)
+    parameter AXIL_CTRL_DATA_W = 32,
+    parameter AXIL_CTRL_ADDR_W = 24,
+
+    // MAC configuration
+    parameter logic CFG_LOW_LATENCY = 1'b1,
+    parameter logic COMBINED_MAC_PCS = 1'b1,
+    parameter MAC_DATA_W = 64
+)
+(
+    /*
+     * Clock: 100MHz
+     * Synchronous reset
+     */
+    input  wire logic                     clk_100mhz,
+    input  wire logic                     rst_100mhz,
+
+    /*
+     * Clock: 125MHz
+     * Synchronous reset
+     */
+    input  wire logic                     clk_125mhz,
+    input  wire logic                     rst_125mhz,
+
+    /*
+     * GPIO
+     */
+    output wire logic                     sfp_led[2],
+    output wire logic [3:0]               led,
+    output wire logic                     led_r,
+    output wire logic                     led_g,
+    output wire logic                     led_hb,
+
+    /*
+     * I2C
+     */
+    input  wire logic                     i2c_scl_i,
+    output wire logic                     i2c_scl_o,
+    input  wire logic                     i2c_sda_i,
+    output wire logic                     i2c_sda_o,
+
+    /*
+     * SMBus
+     */
+    input  wire logic                     smbclk_i,
+    output wire logic                     smbclk_o,
+    input  wire logic                     smbdat_i,
+    output wire logic                     smbdat_o,
+
+    /*
+     * Ethernet: SFP+
+     */
+    input  wire logic                     sfp_rx_p[2],
+    input  wire logic                     sfp_rx_n[2],
+    output wire logic                     sfp_tx_p[2],
+    output wire logic                     sfp_tx_n[2],
+    input  wire logic                     sfp_mgt_refclk_p,
+    input  wire logic                     sfp_mgt_refclk_n,
+    output wire logic                     sfp_mgt_refclk_out,
+    input  wire logic [1:0]               sfp_npres,
+    input  wire logic [1:0]               sfp_tx_fault,
+    input  wire logic [1:0]               sfp_los,
+
+    input  wire logic [1:0]               sfp_i2c_scl_i,
+    output wire logic [1:0]               sfp_i2c_scl_o,
+    input  wire logic [1:0]               sfp_i2c_sda_i,
+    output wire logic [1:0]               sfp_i2c_sda_o,
+
+    /*
+     * PCIe
+     */
+    input  wire logic                     pcie_clk,
+    input  wire logic                     pcie_rst,
+    taxi_axis_if.snk                      s_axis_pcie_cq,
+    taxi_axis_if.src                      m_axis_pcie_cc,
+    taxi_axis_if.src                      m_axis_pcie_rq,
+    taxi_axis_if.snk                      s_axis_pcie_rc,
+
+    input  wire logic [RQ_SEQ_NUM_W-1:0]  pcie_rq_seq_num0,
+    input  wire logic                     pcie_rq_seq_num_vld0,
+    input  wire logic [RQ_SEQ_NUM_W-1:0]  pcie_rq_seq_num1,
+    input  wire logic                     pcie_rq_seq_num_vld1,
+
+    input  wire logic                     pcie_user_lnk_up,
+    input  wire logic                     cfg_phy_link_down,
+    input  wire logic [1:0]               cfg_phy_link_status,
+    input  wire logic [2:0]               cfg_negotiated_width,
+    input  wire logic [1:0]               cfg_current_speed,
+    input  wire logic [15:0]              cfg_function_status,
+    input  wire logic [11:0]              cfg_function_power_state,
+    input  wire logic [1:0]               cfg_link_power_state,
+    input  wire logic [5:0]               cfg_ltssm_state,
+    input  wire logic [1:0]               cfg_rx_pm_state,
+    input  wire logic [1:0]               cfg_tx_pm_state,
+    input  wire logic [7:0]               cfg_bus_number,
+
+    input  wire logic [1:0]               cfg_max_payload,
+    input  wire logic [2:0]               cfg_max_read_req,
+    input  wire logic [3:0]               cfg_rcb_status,
+
+    output wire logic [9:0]               cfg_mgmt_addr,
+    output wire logic [7:0]               cfg_mgmt_function_number,
+    output wire logic                     cfg_mgmt_write,
+    output wire logic [31:0]              cfg_mgmt_write_data,
+    output wire logic [3:0]               cfg_mgmt_byte_enable,
+    output wire logic                     cfg_mgmt_read,
+    input  wire logic [31:0]              cfg_mgmt_read_data,
+    input  wire logic                     cfg_mgmt_read_write_done,
+    output wire logic [63:0]              cfg_dsn,
+
+    input  wire logic [7:0]               cfg_fc_ph,
+    input  wire logic [11:0]              cfg_fc_pd,
+    input  wire logic [7:0]               cfg_fc_nph,
+    input  wire logic [11:0]              cfg_fc_npd,
+    input  wire logic [7:0]               cfg_fc_cplh,
+    input  wire logic [11:0]              cfg_fc_cpld,
+    output wire logic [2:0]               cfg_fc_sel,
+
+    input  wire logic [3:0]               cfg_interrupt_msi_enable,
+    input  wire logic [11:0]              cfg_interrupt_msi_mmenable,
+    input  wire logic                     cfg_interrupt_msi_mask_update,
+    input  wire logic [31:0]              cfg_interrupt_msi_data,
+    output wire logic [1:0]               cfg_interrupt_msi_select,
+    output wire logic [31:0]              cfg_interrupt_msi_int,
+    output wire logic [31:0]              cfg_interrupt_msi_pending_status,
+    output wire logic                     cfg_interrupt_msi_pending_status_data_enable,
+    output wire logic [1:0]               cfg_interrupt_msi_pending_status_function_num,
+    input  wire logic                     cfg_interrupt_msi_sent,
+    input  wire logic                     cfg_interrupt_msi_fail,
+    output wire logic [2:0]               cfg_interrupt_msi_attr,
+    output wire logic                     cfg_interrupt_msi_tph_present,
+    output wire logic [1:0]               cfg_interrupt_msi_tph_type,
+    output wire logic [7:0]               cfg_interrupt_msi_tph_st_tag,
+    output wire logic [7:0]               cfg_interrupt_msi_function_number,
+
+    /*
+     * QSPI flash
+     */
+    output wire logic                     fpga_boot,
+    output wire logic                     qspi_clk,
+    input  wire logic [3:0]               qspi_dq_i,
+    output wire logic [3:0]               qspi_dq_o,
+    output wire logic [3:0]               qspi_dq_oe,
+    output wire logic                     qspi_cs
+);
+
+localparam logic PTP_TS_FMT_TOD = 1'b0;
+localparam PTP_TS_W = PTP_TS_FMT_TOD ? 96 : 48;
+
+// AS02 asmcehnk build does not expose Taxi shell/VPD identity.  PCIe
+// identity/configuration lives in pcie4_uscale_plus_0 plus the asmcehnk CFG
+// bridge.  The unused PCIe extended-configuration interface is disabled in the
+// XCI, and the QSPI/boot pins are held in a safe idle state for bring-up.
+assign fpga_boot = 1'b0;
+assign qspi_clk = 1'b0;
+assign qspi_dq_o = 4'd0;
+assign qspi_dq_oe = 4'd0;
+assign qspi_cs = 1'b1;
+
+// I2C
+localparam logic OPTIC_EN = 1'b1;
+localparam OPTIC_CNT = 2;
+
+localparam logic EEPROM_EN = 1'b1;
+localparam EEPROM_IDX = OPTIC_EN ? OPTIC_CNT : 0;
+
+localparam logic MAC_EEPROM_EN = EEPROM_EN;
+localparam MAC_EEPROM_IDX = EEPROM_IDX;
+localparam MAC_EEPROM_OFFSET = 32;
+localparam MAC_COUNT = OPTIC_CNT;
+localparam logic MAC_FROM_BASE = 1'b1;
+
+localparam logic SN_EEPROM_EN = EEPROM_EN;
+localparam SN_EEPROM_IDX = EEPROM_IDX;
+localparam SN_EEPROM_OFFSET = 0;
+localparam SN_LEN = 32;
+
+localparam logic PLL_EN = 1'b0;
+localparam PLL_IDX = EEPROM_IDX + (EEPROM_EN ? 1 : 0);
+
+localparam logic MUX_EN = 1'b0;
+localparam MUX_CNT = 1;
+localparam logic [MUX_CNT-1:0][6:0] MUX_I2C_ADDR = '0;
+
+// localparam DEV_CNT = PLL_IDX + (PLL_EN ? 1 : 0);
+localparam DEV_CNT = 4;
+localparam logic [DEV_CNT-1:0][6:0] DEV_I2C_ADDR = {7'h50, 7'h51, 7'h50, 7'h50};
+localparam logic [DEV_CNT-1:0][31:0] DEV_ADDR_CFG = {32'h00_00_0001, 32'h00_00_0001, 32'h00_00_0040, 32'h00_00_0040};
+localparam logic [DEV_CNT-1:0][MUX_CNT-1:0][7:0] DEV_MUX_MASK = '0;
+
+localparam CYC_PER_US = 250;
+localparam PAGE_SEL_DELAY_US = SIM ? 20 : 2000;
+localparam I2C_PRESCALE = SIM ? 2 : 250000/(400*4);
+localparam I2C_TBUF_CYC = 20;
+
+taxi_axis_if #(
+    .DATA_W(32),
+    .KEEP_EN(1),
+    .ID_EN(1),
+    .ID_W(4),
+    .USER_EN(1),
+    .USER_W(1)
+) axis_brd_ctrl_cmd(), axis_brd_ctrl_rsp();
+
+wire [DEV_CNT-1:0] i2c_dev_sel;
+
+wire int_i2c_scl_i;
+wire int_i2c_scl_o;
+wire int_i2c_sda_i;
+wire int_i2c_sda_o;
+
+assign {smbclk_o, i2c_scl_o, sfp_i2c_scl_o} = {DEV_CNT{int_i2c_scl_o}} | ~i2c_dev_sel;
+assign {smbdat_o, i2c_sda_o, sfp_i2c_sda_o} = {DEV_CNT{int_i2c_sda_o}} | ~i2c_dev_sel;
+
+assign int_i2c_scl_i = &({smbclk_i, i2c_scl_i, sfp_i2c_scl_i} | ~i2c_dev_sel);
+assign int_i2c_sda_i = &({smbdat_i, i2c_sda_i, sfp_i2c_sda_i} | ~i2c_dev_sel);
+
+cndm_brd_ctrl_i2c #(
+    .OPTIC_EN(OPTIC_EN),
+    .OPTIC_CNT(OPTIC_CNT),
+
+    .EEPROM_EN(EEPROM_EN),
+    .EEPROM_IDX(EEPROM_IDX),
+
+    .MAC_EEPROM_EN(MAC_EEPROM_EN),
+    .MAC_EEPROM_IDX(MAC_EEPROM_IDX),
+    .MAC_EEPROM_OFFSET(MAC_EEPROM_OFFSET),
+    .MAC_COUNT(MAC_COUNT),
+    .MAC_FROM_BASE(MAC_FROM_BASE),
+
+    .SN_EEPROM_EN(SN_EEPROM_EN),
+    .SN_EEPROM_IDX(SN_EEPROM_IDX),
+    .SN_EEPROM_OFFSET(SN_EEPROM_OFFSET),
+    .SN_LEN(SN_LEN),
+
+    .PLL_EN(PLL_EN),
+    .PLL_IDX(PLL_IDX),
+
+    .MUX_EN(MUX_EN),
+    .MUX_CNT(MUX_CNT),
+    .MUX_I2C_ADDR(MUX_I2C_ADDR),
+
+    .DEV_CNT(DEV_CNT),
+    .DEV_I2C_ADDR(DEV_I2C_ADDR),
+    .DEV_ADDR_CFG(DEV_ADDR_CFG),
+    .DEV_MUX_MASK(DEV_MUX_MASK),
+
+    .CYC_PER_US(CYC_PER_US),
+    .PAGE_SEL_DELAY_US(PAGE_SEL_DELAY_US),
+    .I2C_PRESCALE(I2C_PRESCALE),
+    .I2C_TBUF_CYC(I2C_TBUF_CYC)
+)
+board_ctrl_i2c_ch_inst (
+    .clk(pcie_clk),
+    .rst(pcie_rst),
+
+    /*
+     * Board control command interface
+     */
+    .s_axis_cmd(axis_brd_ctrl_cmd),
+    .m_axis_rsp(axis_brd_ctrl_rsp),
+
+    /*
+     * I2C interface
+     */
+    .i2c_scl_i(int_i2c_scl_i),
+    .i2c_scl_o(int_i2c_scl_o),
+    .i2c_sda_i(int_i2c_sda_i),
+    .i2c_sda_o(int_i2c_sda_o),
+
+    .dev_sel(i2c_dev_sel),
+    .dev_rst()
+);
+
+// SFP+
+wire sfp_tx_clk[2];
+wire sfp_tx_rst[2];
+wire sfp_rx_clk[2];
+wire sfp_rx_rst[2];
+
+wire sfp_rx_status[2];
+
+assign sfp_led[0] = !sfp_rx_status[0];
+assign sfp_led[1] = !sfp_rx_status[1];
+assign led = '1;
+assign led_r = 1'b1;
+// assign led_g = 1'b1;
+
+localparam HB_COUNT = 62500000;
+localparam CL_HB_COUNT = $clog2(HB_COUNT);
+logic [CL_HB_COUNT-1:0] hb_count_reg = '0;
+logic hb_reg = 1'b0;
+
+assign led_hb = !hb_reg;
+
+always_ff @(posedge clk_125mhz) begin
+    if (hb_count_reg == 0) begin
+        hb_count_reg <= HB_COUNT;
+        hb_reg <= !hb_reg;
+    end else begin
+        hb_count_reg <= hb_count_reg - 1;
+    end
+
+    if (rst_125mhz) begin
+        hb_count_reg <= '0;
+        hb_reg <= 1'b0;
+    end
+end
+
+wire sfp_gtpowergood;
+
+wire sfp_mgt_refclk;
+wire sfp_mgt_refclk_int;
+wire sfp_mgt_refclk_bufg;
+
+assign sfp_mgt_refclk_out = sfp_mgt_refclk_bufg;
+
+wire sfp_rst;
+
+taxi_axis_if #(.DATA_W(MAC_DATA_W), .ID_W(8), .USER_EN(1), .USER_W(1)) axis_sfp_tx[2]();
+taxi_axis_if #(.DATA_W(PTP_TS_W), .KEEP_W(1), .ID_W(8)) axis_sfp_tx_cpl[2]();
+taxi_axis_if #(.DATA_W(MAC_DATA_W), .ID_W(8), .USER_EN(1), .USER_W(1+PTP_TS_W)) axis_sfp_rx[2]();
+taxi_axis_if #(.DATA_W(16), .KEEP_W(1), .KEEP_EN(0), .LAST_EN(0), .USER_EN(1), .USER_W(1), .ID_EN(1), .ID_W(8)) axis_sfp_stat();
+
+if (SIM) begin
+
+    assign sfp_mgt_refclk = sfp_mgt_refclk_p;
+    assign sfp_mgt_refclk_int = sfp_mgt_refclk_p;
+    assign sfp_mgt_refclk_bufg = sfp_mgt_refclk_int;
+
+end else begin
+
+    IBUFDS_GTE4 ibufds_gte4_sfp_mgt_refclk_inst (
+        .I     (sfp_mgt_refclk_p),
+        .IB    (sfp_mgt_refclk_n),
+        .CEB   (1'b0),
+        .O     (sfp_mgt_refclk),
+        .ODIV2 (sfp_mgt_refclk_int)
+    );
+
+    BUFG_GT bufg_gt_sfp_mgt_refclk_inst (
+        .CE      (sfp_gtpowergood),
+        .CEMASK  (1'b1),
+        .CLR     (1'b0),
+        .CLRMASK (1'b1),
+        .DIV     (3'd0),
+        .I       (sfp_mgt_refclk_int),
+        .O       (sfp_mgt_refclk_bufg)
+    );
+
+end
+
+taxi_sync_reset #(
+    .N(4)
+)
+sfp_sync_reset_inst (
+    .clk(sfp_mgt_refclk_bufg),
+    .rst(rst_125mhz),
+    .out(sfp_rst)
+);
+
+taxi_apb_if #(
+    .ADDR_W(18),
+    .DATA_W(16)
+)
+gt_apb_ctrl();
+
+wire ptp_clk;
+wire ptp_rst;
+wire ptp_sample_clk;
+wire ptp_td_sd;
+wire ptp_pps;
+reg [25:0] asmcehnk_led_hb_ctr = '0;
+
+assign ptp_clk = sfp_mgt_refclk_bufg;
+assign ptp_rst = sfp_rst;
+assign ptp_sample_clk = clk_125mhz;
+assign ptp_td_sd = 1'b0;
+assign ptp_pps = 1'b0;
+
+always_ff @(posedge clk_125mhz) begin
+    if (rst_125mhz) asmcehnk_led_hb_ctr <= '0;
+    else asmcehnk_led_hb_ctr <= asmcehnk_led_hb_ctr + 1'b1;
+end
+wire ptp_pps_str;
+
+assign ptp_pps_str = asmcehnk_led_hb_ctr[25];
+
+assign led_g = ptp_pps_str;
+
+taxi_eth_mac_25g_us #(
+    .SIM(SIM),
+    .VENDOR(VENDOR),
+    .FAMILY(FAMILY),
+
+    .CNT(2),
+
+    // GT config
+    .CFG_LOW_LATENCY(CFG_LOW_LATENCY),
+
+    // GT type
+    .GT_TYPE("GTY"),
+
+    // GT parameters
+    .GT_TX_POLARITY('0),
+    .GT_RX_POLARITY('0),
+
+    // MAC/PHY config
+    .COMBINED_MAC_PCS(COMBINED_MAC_PCS),
+    .DATA_W(axis_sfp_tx[0].DATA_W),
+    .USXGMII_EN(COMBINED_MAC_PCS && axis_sfp_tx[0].DATA_W == 32),
+    .DIC_EN(1'b1),
+    .PTP_TS_EN(PTP_TS_EN),
+    .PTP_TD_EN(PTP_TS_EN),
+    .PTP_TS_FMT_TOD(PTP_TS_FMT_TOD),
+    .PTP_TS_W(PTP_TS_W),
+    .PTP_TD_SDI_PIPELINE(2),
+    .PRBS31_EN(1'b0),
+    .TX_SERDES_PIPELINE(1),
+    .RX_SERDES_PIPELINE(1),
+    .COUNT_125US(125000/6.4),
+    .STAT_EN(1'b0)
+)
+sfp_mac_inst (
+    .xcvr_ctrl_clk(clk_125mhz),
+    .xcvr_ctrl_rst(sfp_rst),
+
+    /*
+     * Transceiver control
+     */
+    .s_apb_ctrl(gt_apb_ctrl),
+
+    /*
+     * Common
+     */
+    .xcvr_gtpowergood_out(sfp_gtpowergood),
+    .xcvr_gtrefclk00_in(sfp_mgt_refclk),
+    .xcvr_qpll0pd_in(1'b0),
+    .xcvr_qpll0reset_in(1'b0),
+    .xcvr_qpll0pcierate_in(3'd0),
+    .xcvr_qpll0lock_out(),
+    .xcvr_qpll0clk_out(),
+    .xcvr_qpll0refclk_out(),
+    .xcvr_gtrefclk01_in(sfp_mgt_refclk),
+    .xcvr_qpll1pd_in(1'b0),
+    .xcvr_qpll1reset_in(1'b0),
+    .xcvr_qpll1pcierate_in(3'd0),
+    .xcvr_qpll1lock_out(),
+    .xcvr_qpll1clk_out(),
+    .xcvr_qpll1refclk_out(),
+
+    /*
+     * Serial data
+     */
+    .xcvr_txp(sfp_tx_p),
+    .xcvr_txn(sfp_tx_n),
+    .xcvr_rxp(sfp_rx_p),
+    .xcvr_rxn(sfp_rx_n),
+
+    /*
+     * MAC clocks
+     */
+    .rx_clk(sfp_rx_clk),
+    .rx_rst_in('{2{1'b0}}),
+    .rx_rst_out(sfp_rx_rst),
+    .tx_clk(sfp_tx_clk),
+    .tx_rst_in('{2{1'b0}}),
+    .tx_rst_out(sfp_tx_rst),
+
+    /*
+     * Transmit interface (AXI stream)
+     */
+    .s_axis_tx(axis_sfp_tx),
+    .m_axis_tx_cpl(axis_sfp_tx_cpl),
+
+    /*
+     * Receive interface (AXI stream)
+     */
+    .m_axis_rx(axis_sfp_rx),
+
+    /*
+     * USXGMII autonegotiation
+     */
+    .an_en('{2{1'b1}}),
+    .an_restart('{2{1'b0}}),
+    .an_speedup('{2{1'b0}}),
+    .an_timeout_en('{2{1'b1}}),
+    .an_usxgmii_en('{2{1'b0}}),
+    .an_usxgmii_auto('{2{1'b1}}),
+    .an_intr(),
+    .an_running(),
+    .an_complete(),
+    .an_timeout(),
+    .an_usxgmii_mode(),
+    .an_adv_ability_usxgmii('{2{16'h1601}}),
+    .an_lp_adv_ability(),
+    .an_lp_usxgmii_link(),
+    .an_lp_usxgmii_speed(),
+    .an_res_full_duplex(),
+
+    /*
+     * PTP clock
+     */
+    .ptp_clk(ptp_clk),
+    .ptp_rst(ptp_rst),
+    .ptp_sample_clk(ptp_sample_clk),
+    .ptp_td_sdi(ptp_td_sd),
+    .tx_ptp_ts_in('{2{'0}}),
+    .tx_ptp_ts_out(),
+    .tx_ptp_ts_step_out(),
+    .tx_ptp_locked(),
+    .rx_ptp_ts_in('{2{'0}}),
+    .rx_ptp_ts_out(),
+    .rx_ptp_ts_step_out(),
+    .rx_ptp_locked(),
+
+    /*
+     * Link-level Flow Control (LFC) (IEEE 802.3 annex 31B PAUSE)
+     */
+    .tx_lfc_req('{2{1'b0}}),
+    .tx_lfc_resend('{2{1'b0}}),
+    .rx_lfc_en('{2{1'b0}}),
+    .rx_lfc_req(),
+    .rx_lfc_ack('{2{1'b0}}),
+
+    /*
+     * Priority Flow Control (PFC) (IEEE 802.3 annex 31D PFC)
+     */
+    .tx_pfc_req('{2{'0}}),
+    .tx_pfc_resend('{2{1'b0}}),
+    .rx_pfc_en('{2{'0}}),
+    .rx_pfc_req(),
+    .rx_pfc_ack('{2{'0}}),
+
+    /*
+     * Pause interface
+     */
+    .tx_lfc_pause_en('{2{1'b0}}),
+    .tx_pause_req('{2{1'b0}}),
+    .tx_pause_ack(),
+
+    /*
+     * Statistics
+     */
+    .stat_clk(clk_125mhz),
+    .stat_rst(rst_125mhz),
+    .m_axis_stat(axis_sfp_stat),
+
+    /*
+     * Status
+     */
+    .tx_start_packet(),
+    .stat_tx_byte(),
+    .stat_tx_pkt_len(),
+    .stat_tx_pkt_ucast(),
+    .stat_tx_pkt_mcast(),
+    .stat_tx_pkt_bcast(),
+    .stat_tx_pkt_vlan(),
+    .stat_tx_pkt_good(),
+    .stat_tx_pkt_bad(),
+    .stat_tx_pad_frame(),
+    .stat_tx_err_oversize(),
+    .stat_tx_err_user(),
+    .stat_tx_err_underflow(),
+    .rx_start_packet(),
+    .rx_error_count(),
+    .rx_block_lock(),
+    .rx_high_ber(),
+    .rx_status(sfp_rx_status),
+    .stat_rx_byte(),
+    .stat_rx_pkt_len(),
+    .stat_rx_pkt_fragment(),
+    .stat_rx_pkt_jabber(),
+    .stat_rx_pkt_ucast(),
+    .stat_rx_pkt_mcast(),
+    .stat_rx_pkt_bcast(),
+    .stat_rx_pkt_vlan(),
+    .stat_rx_pkt_good(),
+    .stat_rx_pkt_bad(),
+    .stat_rx_err_oversize(),
+    .stat_rx_err_bad_fcs(),
+    .stat_rx_err_bad_block(),
+    .stat_rx_err_framing(),
+    .stat_rx_err_preamble(),
+    .stat_rx_fifo_drop('{2{1'b0}}),
+    .stat_tx_mcf(),
+    .stat_rx_mcf(),
+    .stat_tx_lfc_pkt(),
+    .stat_tx_lfc_xon(),
+    .stat_tx_lfc_xoff(),
+    .stat_tx_lfc_paused(),
+    .stat_tx_pfc_pkt(),
+    .stat_tx_pfc_xon(),
+    .stat_tx_pfc_xoff(),
+    .stat_tx_pfc_paused(),
+    .stat_rx_lfc_pkt(),
+    .stat_rx_lfc_xon(),
+    .stat_rx_lfc_xoff(),
+    .stat_rx_lfc_paused(),
+    .stat_rx_pfc_pkt(),
+    .stat_rx_pfc_xon(),
+    .stat_rx_pfc_xoff(),
+    .stat_rx_pfc_paused(),
+
+    /*
+     * Configuration
+     */
+    .cfg_tx_pad_en('{2{1'b1}}),
+    .cfg_tx_min_pkt_len('{2{8'd60-1}}),
+    .cfg_tx_max_pkt_len('{2{16'd9218-1}}),
+    .cfg_tx_ifg('{2{8'd12}}),
+    .cfg_tx_enable('{2{1'b1}}),
+    .cfg_rx_max_pkt_len('{2{16'd9218-1}}),
+    .cfg_rx_enable('{2{1'b1}}),
+    .cfg_tx_prbs31_enable('{2{1'b0}}),
+    .cfg_rx_prbs31_enable('{2{1'b0}}),
+    .cfg_mcf_rx_eth_dst_mcast('{2{48'h01_80_C2_00_00_01}}),
+    .cfg_mcf_rx_check_eth_dst_mcast('{2{1'b1}}),
+    .cfg_mcf_rx_eth_dst_ucast('{2{48'd0}}),
+    .cfg_mcf_rx_check_eth_dst_ucast('{2{1'b0}}),
+    .cfg_mcf_rx_eth_src('{2{48'd0}}),
+    .cfg_mcf_rx_check_eth_src('{2{1'b0}}),
+    .cfg_mcf_rx_eth_type('{2{16'h8808}}),
+    .cfg_mcf_rx_opcode_lfc('{2{16'h0001}}),
+    .cfg_mcf_rx_check_opcode_lfc('{2{1'b1}}),
+    .cfg_mcf_rx_opcode_pfc('{2{16'h0101}}),
+    .cfg_mcf_rx_check_opcode_pfc('{2{1'b1}}),
+    .cfg_mcf_rx_forward('{2{1'b0}}),
+    .cfg_mcf_rx_enable('{2{1'b0}}),
+    .cfg_tx_lfc_eth_dst('{2{48'h01_80_C2_00_00_01}}),
+    .cfg_tx_lfc_eth_src('{2{48'h80_23_31_43_54_4C}}),
+    .cfg_tx_lfc_eth_type('{2{16'h8808}}),
+    .cfg_tx_lfc_opcode('{2{16'h0001}}),
+    .cfg_tx_lfc_en('{2{1'b0}}),
+    .cfg_tx_lfc_quanta('{2{16'hffff}}),
+    .cfg_tx_lfc_refresh('{2{16'h7fff}}),
+    .cfg_tx_pfc_eth_dst('{2{48'h01_80_C2_00_00_01}}),
+    .cfg_tx_pfc_eth_src('{2{48'h80_23_31_43_54_4C}}),
+    .cfg_tx_pfc_eth_type('{2{16'h8808}}),
+    .cfg_tx_pfc_opcode('{2{16'h0101}}),
+    .cfg_tx_pfc_en('{2{1'b0}}),
+    .cfg_tx_pfc_quanta('{2{'{8{16'hffff}}}}),
+    .cfg_tx_pfc_refresh('{2{'{8{16'h7fff}}}}),
+    .cfg_rx_lfc_opcode('{2{16'h0001}}),
+    .cfg_rx_lfc_en('{2{1'b0}}),
+    .cfg_rx_pfc_opcode('{2{16'h0101}}),
+    .cfg_rx_pfc_en('{2{1'b0}})
+);
+
+// Board-control path is not part of asmcehnk transport. Keep the I2C block
+// instantiated for SFP/board bring-up, but do not issue CNDM commands.
+assign axis_brd_ctrl_cmd.tdata  = '0;
+assign axis_brd_ctrl_cmd.tkeep  = '0;
+assign axis_brd_ctrl_cmd.tstrb  = '0;
+assign axis_brd_ctrl_cmd.tid    = '0;
+assign axis_brd_ctrl_cmd.tdest  = '0;
+assign axis_brd_ctrl_cmd.tuser  = '0;
+assign axis_brd_ctrl_cmd.tlast  = 1'b0;
+assign axis_brd_ctrl_cmd.tvalid = 1'b0;
+assign axis_brd_ctrl_rsp.tready = 1'b1;
+
+asmcehnk_as02_core #(
+    .PARAM_LOCAL_MAC(PARAM_LOCAL_MAC),
+    .PARAM_LOCAL_IP(PARAM_LOCAL_IP),
+    .PARAM_UDP_PORT(PARAM_UDP_PORT),
+    .PARAM_DEVICE_ID(PARAM_DEVICE_ID),
+    .PARAM_VERSION_NUMBER_MAJOR(PARAM_VERSION_NUMBER_MAJOR),
+    .PARAM_VERSION_NUMBER_MINOR(PARAM_VERSION_NUMBER_MINOR),
+    .PARAM_CUSTOM_VALUE(PARAM_CUSTOM_VALUE),
+    .RQ_SEQ_NUM_W(RQ_SEQ_NUM_W),
+    .MAC_DATA_W(MAC_DATA_W),
+    .MAC_RX_USER_W(1+PTP_TS_W)
+)
+asmcehnk_as02_core_inst (
+    .clk_100mhz(clk_100mhz),
+    .rst_100mhz(rst_100mhz),
+
+    /* PCIe */
+    .pcie_clk(pcie_clk),
+    .pcie_rst(pcie_rst),
+    .s_axis_pcie_cq(s_axis_pcie_cq),
+    .m_axis_pcie_cc(m_axis_pcie_cc),
+    .m_axis_pcie_rq(m_axis_pcie_rq),
+    .s_axis_pcie_rc(s_axis_pcie_rc),
+
+    .pcie_rq_seq_num0(pcie_rq_seq_num0),
+    .pcie_rq_seq_num_vld0(pcie_rq_seq_num_vld0),
+    .pcie_rq_seq_num1(pcie_rq_seq_num1),
+    .pcie_rq_seq_num_vld1(pcie_rq_seq_num_vld1),
+
+    .pcie_user_lnk_up(pcie_user_lnk_up),
+    .cfg_phy_link_down(cfg_phy_link_down),
+    .cfg_phy_link_status(cfg_phy_link_status),
+    .cfg_negotiated_width(cfg_negotiated_width),
+    .cfg_current_speed(cfg_current_speed),
+    .cfg_function_status(cfg_function_status),
+    .cfg_function_power_state(cfg_function_power_state),
+    .cfg_link_power_state(cfg_link_power_state),
+    .cfg_ltssm_state(cfg_ltssm_state),
+    .cfg_rx_pm_state(cfg_rx_pm_state),
+    .cfg_tx_pm_state(cfg_tx_pm_state),
+    .cfg_bus_number(cfg_bus_number),
+
+    .cfg_max_payload(cfg_max_payload),
+    .cfg_max_read_req(cfg_max_read_req),
+    .cfg_rcb_status(cfg_rcb_status),
+
+    .cfg_mgmt_addr(cfg_mgmt_addr),
+    .cfg_mgmt_function_number(cfg_mgmt_function_number),
+    .cfg_mgmt_write(cfg_mgmt_write),
+    .cfg_mgmt_write_data(cfg_mgmt_write_data),
+    .cfg_mgmt_byte_enable(cfg_mgmt_byte_enable),
+    .cfg_mgmt_read(cfg_mgmt_read),
+    .cfg_mgmt_read_data(cfg_mgmt_read_data),
+    .cfg_mgmt_read_write_done(cfg_mgmt_read_write_done),
+    .cfg_dsn(cfg_dsn),
+
+    .cfg_fc_ph(cfg_fc_ph),
+    .cfg_fc_pd(cfg_fc_pd),
+    .cfg_fc_nph(cfg_fc_nph),
+    .cfg_fc_npd(cfg_fc_npd),
+    .cfg_fc_cplh(cfg_fc_cplh),
+    .cfg_fc_cpld(cfg_fc_cpld),
+    .cfg_fc_sel(cfg_fc_sel),
+
+    .cfg_interrupt_msi_enable(cfg_interrupt_msi_enable),
+    .cfg_interrupt_msi_mmenable(cfg_interrupt_msi_mmenable),
+    .cfg_interrupt_msi_mask_update(cfg_interrupt_msi_mask_update),
+    .cfg_interrupt_msi_data(cfg_interrupt_msi_data),
+    .cfg_interrupt_msi_select(cfg_interrupt_msi_select),
+    .cfg_interrupt_msi_int(cfg_interrupt_msi_int),
+    .cfg_interrupt_msi_pending_status(cfg_interrupt_msi_pending_status),
+    .cfg_interrupt_msi_pending_status_data_enable(cfg_interrupt_msi_pending_status_data_enable),
+    .cfg_interrupt_msi_pending_status_function_num(cfg_interrupt_msi_pending_status_function_num),
+    .cfg_interrupt_msi_sent(cfg_interrupt_msi_sent),
+    .cfg_interrupt_msi_fail(cfg_interrupt_msi_fail),
+    .cfg_interrupt_msi_attr(cfg_interrupt_msi_attr),
+    .cfg_interrupt_msi_tph_present(cfg_interrupt_msi_tph_present),
+    .cfg_interrupt_msi_tph_type(cfg_interrupt_msi_tph_type),
+    .cfg_interrupt_msi_tph_st_tag(cfg_interrupt_msi_tph_st_tag),
+    .cfg_interrupt_msi_function_number(cfg_interrupt_msi_function_number),
+
+    /* Ethernet */
+    .mac_tx_clk(sfp_tx_clk),
+    .mac_tx_rst(sfp_tx_rst),
+    .mac_axis_tx(axis_sfp_tx),
+    .mac_axis_tx_cpl(axis_sfp_tx_cpl),
+    .mac_rx_clk(sfp_rx_clk),
+    .mac_rx_rst(sfp_rx_rst),
+    .mac_axis_rx(axis_sfp_rx)
+);
+
+endmodule
+
+`resetall

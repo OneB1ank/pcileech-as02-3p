@@ -1,0 +1,7 @@
+* text=auto eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.bit binary
+*.bin binary
+*.ltx binary
+*.xci text eol=lf

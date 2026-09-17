@@ -1,0 +1,41 @@
+# Vivado/generated state
+.Xil/
+**/.Xil/
+*.jou
+*.log
+*.str
+*.wdb
+*.pb
+*.backup.*
+*.xpr
+*.runs/
+*.cache/
+*.gen/
+*.hw/
+*.ip_user_files/
+*.sim/
+*.srcs/
+
+# Project scratch and generated artifacts
+as02_asmcehnk_25g/.tmp_*/
+as02_asmcehnk_25g/tmp_*/
+as02_asmcehnk_25g/reports/
+as02_asmcehnk_25g/artifacts/
+as02_asmcehnk_25g/board_evidence_*/
+as02_asmcehnk_25g/board_evidence_*.zip
+as02_asmcehnk_25g/host/leechcore/.build/
+as02_asmcehnk_25g/host/leechcore/.test_build/
+as02_asmcehnk_25g/host/leechcore/.test_out/
+as02_asmcehnk_25g/host/leechcore/out/
+as02_asmcehnk_25g/*.bit
+as02_asmcehnk_25g/*.bin
+as02_asmcehnk_25g/*.ltx
+
+# Python/editor/OS
+__pycache__/
+*.pyc
+.venv/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,167 @@
+{
+  "schema_version": 1,
+  "build_define": "AS02_HW_DEBUG",
+  "transport": {
+    "physical_port": "SFP1",
+    "rtl_index": 0,
+    "local_ip": "192.168.0.222",
+    "udp_port": 28474
+  },
+  "ilas": {
+    "as02_net_ila": {
+      "clock_domain": "sfp1_network",
+      "depth": 2048,
+      "input_pipeline_stages": 2,
+      "probes": {
+        "0": ["dbg_net_control", 64],
+        "1": ["dbg_net_rx_data", 64],
+        "2": ["dbg_net_rx_keep", 8],
+        "3": ["dbg_net_tx_data", 64],
+        "4": ["dbg_net_tx_keep", 8],
+        "5": ["dbg_net_com_rx_data", 64],
+        "6": ["dbg_net_com_tx_data", 256],
+        "7": ["dbg_udp_control", 64],
+        "8": ["dbg_udp_metadata", 128],
+        "9": ["dbg_udp_peer", 64],
+        "10": ["dbg_udp_counters", 256]
+      }
+    },
+    "as02_pcie_ila": {
+      "clock_domain": "pcie_user_250mhz",
+      "depth": 2048,
+      "input_pipeline_stages": 2,
+      "probes": {
+        "0": ["dbg_pcie_control", 64],
+        "1": ["dbg_pcie_keep", 32],
+        "2": ["dbg_pcie_cq_data", 256],
+        "3": ["dbg_pcie_cq_user", 88],
+        "4": ["dbg_pcie_cc_data", 256],
+        "5": ["dbg_pcie_cc_user", 33],
+        "6": ["dbg_pcie_rq_data", 256],
+        "7": ["dbg_pcie_rq_user", 62],
+        "8": ["dbg_pcie_rc_data", 256],
+        "9": ["dbg_pcie_rc_user", 75],
+        "10": ["dbg_pcie_counters", 256],
+        "11": ["dbg_pcie_status", 128]
+      }
+    }
+  },
+  "vios": {
+    "as02_net_vio": {
+      "outputs": 0,
+      "inputs": {
+        "probe_in0": ["dbg_udp_control", 64],
+        "probe_in1": ["dbg_udp_counters", 256],
+        "probe_in2": ["dbg_udp_metadata", 128],
+        "probe_in3": ["dbg_udp_peer", 64]
+      }
+    },
+    "as02_pcie_vio": {
+      "outputs": 0,
+      "inputs": {
+        "probe_in0": ["dbg_pcie_control", 64],
+        "probe_in1": ["dbg_pcie_counters", 256],
+        "probe_in2": ["dbg_pcie_status", 128]
+      }
+    }
+  },
+  "control_bits": {
+    "dbg_net_control": {
+      "2": "mac_rx_valid",
+      "3": "mac_rx_ready",
+      "4": "mac_rx_last",
+      "6": "mac_tx_valid",
+      "7": "mac_tx_ready",
+      "8": "mac_tx_last",
+      "9": "com_rx_valid_including_startup",
+      "10": "com_tx_valid",
+      "11": "com_tx_ready",
+      "32": "rx_cdc_good_frame",
+      "33": "rx_cdc_bad_frame",
+      "34": "rx_cdc_overflow"
+    },
+    "dbg_udp_control": {
+      "3": "udp_header_valid",
+      "5": "udp_header_match",
+      "6": "udp_header_fire",
+      "13": "accepted_udp_payload_word",
+      "14": "peer_valid",
+      "15": "asmcehnk_tx256_valid",
+      "16": "asmcehnk_tx256_ready",
+      "26": "udp_tx_header_valid",
+      "28": "udp_tx_payload_valid",
+      "30": "udp_tx_payload_last",
+      "31": "protocol_error_event",
+      "39": "ipv4_checksum_error",
+      "41": "arp_resolution_failed",
+      "46": "udp_header_rejected",
+      "47": "partial_or_errored_payload",
+      "48": "tx_blocked_without_peer"
+    },
+    "dbg_pcie_control": {
+      "1": "user_link_up",
+      "16": "cq_valid",
+      "17": "cq_ready",
+      "18": "cq_last",
+      "19": "cc_valid",
+      "20": "cc_ready",
+      "21": "cc_last",
+      "22": "rq_valid",
+      "23": "rq_ready",
+      "24": "rq_last",
+      "25": "rc_valid",
+      "26": "rc_ready",
+      "27": "rc_last",
+      "28": "rq_sequence_valid_0",
+      "29": "rq_sequence_valid_1",
+      "30": "cfg_mgmt_read",
+      "31": "cfg_mgmt_write",
+      "32": "cfg_mgmt_done"
+    },
+    "dbg_pcie_status": {
+      "122:116": "rq_sequence_outstanding_count",
+      "123": "rq_sequence_credit_blocked",
+      "124": "rq_sequence_protocol_error_sticky",
+      "125": "rq_mrd_tag_reuse_blocked",
+      "126": "rc_unknown_tag_release_error_sticky"
+    }
+  },
+  "counter_words_low_to_high": {
+    "dbg_udp_counters": [
+      "mac_rx_frames",
+      "udp_headers",
+      "udp_headers_accepted",
+      "udp_headers_rejected",
+      "udp_payload_words_accepted",
+      "asmcehnk_tx256_words",
+      "udp_tx_frames",
+      "protocol_errors"
+    ],
+    "dbg_pcie_counters": [
+      "link_up_events",
+      "link_down_events",
+      "cq_packets",
+      "cc_packets",
+      "rq_packets",
+      "rc_packets",
+      "cfg_mgmt_completions",
+      "rq_sequence_events"
+    ]
+  },
+  "trigger_presets": {
+    "mac_rx_frame": ["as02_net_ila", "dbg_net_control", 4, 1],
+    "udp_header": ["as02_net_ila", "dbg_udp_control", 6, 1],
+    "udp_accepted_word": ["as02_net_ila", "dbg_udp_control", 13, 1],
+    "udp_error": ["as02_net_ila", "dbg_udp_control", 31, 1],
+    "udp_response": ["as02_net_ila", "dbg_udp_control", 28, 1],
+    "pcie_link_up": ["as02_pcie_ila", "dbg_pcie_control", 1, 1],
+    "cq_request": ["as02_pcie_ila", "dbg_pcie_control", 16, 1],
+    "cc_response": ["as02_pcie_ila", "dbg_pcie_control", 19, 1],
+    "rq_request": ["as02_pcie_ila", "dbg_pcie_control", 22, 1],
+    "rc_completion": ["as02_pcie_ila", "dbg_pcie_control", 25, 1],
+    "rq_credit_blocked": ["as02_pcie_ila", "dbg_pcie_status", 123, 1],
+    "rq_sequence_error": ["as02_pcie_ila", "dbg_pcie_status", 124, 1],
+    "rq_tag_blocked": ["as02_pcie_ila", "dbg_pcie_status", 125, 1],
+    "rc_tag_error": ["as02_pcie_ila", "dbg_pcie_status", 126, 1]
+  }
+}

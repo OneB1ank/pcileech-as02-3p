@@ -1,0 +1,9 @@
+[submodule "third_party/taxi"]
+	path = third_party/taxi
+	url = https://github.com/fpganinja/taxi.git
+[submodule "third_party/corundum"]
+	path = third_party/corundum
+	url = https://github.com/corundum/corundum.git
+[submodule "LeechCore"]
+	path = LeechCore
+	url = https://github.com/ufrisk/LeechCore.git
