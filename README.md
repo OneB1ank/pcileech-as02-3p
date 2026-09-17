@@ -26,8 +26,8 @@ Vivado 2024.2 project that ports the asmcehnk/PCILeech-compatible FPGA framework
 ## Clone
 
 ```powershell
-git clone --recurse-submodules https://github.com/OneB1ank/as02-asmcehnk-25g.git
-cd as02-asmcehnk-25g
+git clone --recurse-submodules https://github.com/OneB1ank/pcileech-as02-3p.git
+cd pcileech-as02-3p
 ```
 
 ## Build the FPGA image
