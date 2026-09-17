@@ -9,7 +9,7 @@ work. Read only the topic needed for the current task.
 
 ## Hardware
 
-- [Vivado programming](vivado-programming.md) — normal/debug image selection, Hardware Manager JTAG programming, PCIe re-enumeration, and the QSPI boundary. Read before loading an image onto the board.
+- [Vivado programming](vivado-programming.md) — JTAG-chain recovery, normal/debug BIT loading, SPIx4 MCS generation, single MT25QU256 programming, power-cycle boot, and PCIe re-enumeration. Read before loading an image onto the board.
 - [Board bring-up](board-bringup.md) — ordered PCIe, SFP1, RawUDP, and LeechCore acceptance gates. Read while collecting real-board evidence.
 
 ## Host integration

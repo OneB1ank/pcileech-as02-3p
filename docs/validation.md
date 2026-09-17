@@ -11,7 +11,7 @@ simulation is not mistaken for physical-board acceptance.
 | Behavioral/XSim regression | Directed packet, reset, byte-order, descriptor, FIFO and backpressure cases behave as expected in simulation | Timing closure, analog link quality or Root Complex behavior |
 | Vivado implementation | The selected part/top synthesizes, places, routes, passes the project timing gate and produces a bitstream | PCIe enumeration, optical traffic or LeechCore operation on a board |
 | Host mock | The AS02 LeechCore DLL selects RawUDP, exposes expected APIs, emits MRd/MWr and accepts deterministic completions | Physical SFP1, target PCIe link or real host memory access |
-| Hardware gate | A recorded board/NIC/Root Complex command demonstrates the named function | Any later gate that was not exercised |
+| Hardware gate | A recorded JTAG/Flash/board/NIC/Root Complex command demonstrates the named function | Any later gate that was not exercised |
 
 Every result should bind the source commit, commands, exit codes, tool versions,
 testbench or physical setup, literal marker/output, and relevant artifact
@@ -48,8 +48,47 @@ The principal closed behaviors are:
 - routed implementation reaches the recorded timing result for the intended
   KU3P part.
 
+## Current bench observation
+
+On **September 17, 2026**, the local Vivado Hardware Manager detected the
+programmer/target but did not list `xcku3p_0`. The current physical state is
+therefore:
+
+| Hardware evidence item | Historical external diagnostic, August 26, 2026 | Current project acceptance, September 17, 2026 |
+| --- | --- | --- |
+| Programmer/hardware target visible | OBSERVED | OBSERVED |
+| FPGA `xcku3p_0` visible in JTAG chain | OBSERVED | OPEN |
+| External Corundum image / cfgmem path | Erase and Program/Verify PASS | diagnostic only; current reproduction optional |
+| Historical cfgmem capacity mapping | `Size 256M`, end `0x0FFFFFFF` from old `-size 256` | REJECTED for MT25QU256 release use |
+| Post-`boot_hw_device` JTAG configuration status | `DONE_PIN=1`, `ISC_DONE=1` | historical diagnostic only |
+| Project normal BIT volatile programming | not part of this evidence | OPEN |
+| Project normal BIT → 32 MiB MCS generation | not part of this evidence | OPEN |
+| Correct 32 MiB MCS Erase/Program/Verify | not part of this evidence | OPEN |
+| Full power removal and automatic project-image boot | not demonstrated | OPEN |
+
+The current observation does not contradict the routed implementation or the
+older external diagnostic. At present there is no FPGA device in the JTAG chain
+on which either the external baseline or the project image can be re-tested.
+
+The board configuration memory has been identified as one Micron MT25QU256,
+256 Mbit, single-device QSPI x4. Vivado 2024.2 on the build workstation contains
+both `mt25qu256-spi-x1_x2_x4` and `mt25qu256-qspi-x4-single` catalog entries.
+The first is the preferred selection; dual-stacked, dual-parallel/x8, BPI, and
+different-capacity entries are excluded.
+
+The corrected `write_cfgmem -size 32` recipe was validated offline with the
+external diagnostic BIT: Vivado reported `Size 32M`, end address `0x01FFFFFF`,
+generated MCS/PRM, and reported zero warnings/errors. No project release MCS was
+programmed by that command validation.
+
 ## Open hardware gates
 
+- Restore the JTAG chain so `xcku3p_0` is visible.
+- Temporarily program the external known-good BIT, then the project normal BIT.
+- Generate a 32 MiB (256 Mbit) SPIx4 MCS at address `0x00000000` with Vivado
+  `write_cfgmem -size 32`.
+- Complete MT25QU256 Erase/Program/Verify.
+- Confirm automatic FPGA configuration after a full power cycle.
 - PCIe cold-boot enumeration and negotiated link evidence.
 - BAR0 read/write against a real root complex.
 - RQ/RC DMA read/write against host memory.
@@ -61,8 +100,13 @@ The repository therefore represents a routed and simulated release candidate, no
 
 ## Claim rules
 
+- Seeing only the programmer proves the USB/programmer target is reachable; it
+  does not prove the FPGA is present in the JTAG chain.
 - Seeing `xcku3p_0` in Hardware Manager proves JTAG visibility only.
 - Successful FPGA programming proves configuration only.
+- Flash Verify proves read-back of programmed contents, not automatic boot.
+- Automatic boot after power-cycle proves persistent configuration, not PCIe,
+  SFP1, BAR/DMA, or LeechCore behavior.
 - A PCIe device entry proves enumeration only after its identity, BAR and link
   properties are recorded.
 - An SFP module LED or carrier state proves neither ARP nor UDP payload
