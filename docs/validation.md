@@ -81,6 +81,19 @@ external diagnostic BIT: Vivado reported `Size 32M`, end address `0x01FFFFFF`,
 generated MCS/PRM, and reported zero warnings/errors. No project release MCS was
 programmed by that command validation.
 
+Hardware Manager state and hardware persistence are tracked separately:
+
+| Item | State type | Meaning |
+| --- | --- | --- |
+| `hw_server`, target and JTAG frequency | Vivado session | Reconnect/reselect after a new session |
+| `xcku3p_0` current device | Vivado session plus live JTAG scan | Must be rediscovered before programming |
+| BIT and LTX file association | Vivado session | Must match the intended normal/debug build |
+| `hw_cfgmem`, MT25QU256 part and MCS/PRM association | Vivado session | Recreate/reselect before another Flash operation |
+| FPGA SRAM configuration | Volatile hardware | Lost on power-off or reconfiguration |
+| MT25QU256 programmed bytes | Persistent hardware | Remain until erased/reprogrammed |
+| `boot_hw_device` result | Commanded warm reload evidence | Not equivalent to physical power removal |
+| Autonomous boot after power removal | Persistent-boot evidence | Required before closing the Flash boot gate |
+
 ## Open hardware gates
 
 - Restore the JTAG chain so `xcku3p_0` is visible.

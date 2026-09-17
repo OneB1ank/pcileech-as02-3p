@@ -89,7 +89,7 @@ current task, or use the complete [documentation index](docs/index.md).
 | Topic | Purpose |
 | --- | --- |
 | [Build and test](docs/build-and-test.md) | Create normal/debug images and run focused regression groups. |
-| [Vivado programming](docs/vivado-programming.md) | Recover the JTAG chain, load BIT/LTX, generate SPIx4 MCS, program the single MT25QU256, and verify power-cycle boot. |
+| [Vivado programming](docs/vivado-programming.md) | Manually associate the Hardware Manager target/device, BIT/LTX and MT25QU256 cfgmem, then verify power-cycle boot. |
 | [Board bring-up](docs/board-bringup.md) | Execute the ordered PCIe → SFP1 → RawUDP → LeechCore hardware gates. |
 | [LeechCore adapter](docs/leechcore-adapter.md) | Build/deploy the DLL and use plain `fpga` with the default RawUDP endpoint. |
 | [Architecture](docs/architecture.md) | Understand reuse boundaries, clock domains, and 128/256-bit PCIe adaptation. |

@@ -10,11 +10,14 @@ The confirmed configuration memory is one **Micron MT25QU256**, a **256 Mbit
 ## Contents
 
 - [Current bench status](#current-bench-status)
+- [What Vivado must associate](#what-vivado-must-associate)
 - [Choose an image](#choose-an-image)
 - [Recover and verify the JTAG chain](#recover-and-verify-the-jtag-chain)
 - [Temporarily program the FPGA](#temporarily-program-the-fpga)
 - [Generate the SPIx4 MCS](#generate-the-spix4-mcs)
 - [Attach and program the MT25QU256](#attach-and-program-the-mt25qu256)
+- [Equivalent Hardware Manager Tcl](#equivalent-hardware-manager-tcl)
+- [What must be re-associated in a new session](#what-must-be-re-associated-in-a-new-session)
 - [Verify power-cycle boot and PCIe enumeration](#verify-power-cycle-boot-and-pcie-enumeration)
 - [Record programming evidence](#record-programming-evidence)
 
@@ -43,6 +46,43 @@ interprets that value as **256 MBytes**, and its PRM records address range
 `0x00000000..0x0FFFFFFF`. It is therefore an old connectivity/Flash-path
 diagnostic, not the correct 32 MiB MT25QU256 mapping, not a project release
 image, and not evidence of a full physical power-cycle boot.
+
+## What Vivado must associate
+
+“Connecting the programmer” and “programming the FPGA” are separate operations.
+Hardware Manager uses this object hierarchy:
+
+```text
+USB/JTAG programmer or cable
+  -> hw_server connection
+  -> hardware target / debug channel
+  -> FPGA hardware device: xcku3p_0
+       -> PROGRAM.FILE: normal or debug BIT
+       -> PROBES.FILE: matching LTX, debug builds only
+       -> configuration-memory object
+            -> physical part: single MT25QU256
+            -> PROGRAM.FILES: 32 MiB SPIx4 MCS
+            -> PROGRAM.PRM_FILE: matching PRM
+            -> Erase / Program / Verify properties
+```
+
+Vivado does not infer all of these objects merely because the USB programmer is
+visible:
+
+| Hardware Manager action | Association created | Persistent result |
+| --- | --- | --- |
+| **Open Target → Auto Connect** | Connects `hw_server`, opens a target and scans the JTAG chain | No FPGA or Flash data is changed |
+| Select `xcku3p_0` | Chooses the FPGA `hw_device` under the target | Selection is session state |
+| **Program Device** | Associates BIT and optional LTX with the FPGA and writes FPGA SRAM | Volatile until power-off/reconfiguration |
+| **Add Configuration Memory Device** | Creates a Vivado `hw_cfgmem` object attached to the selected FPGA and chosen physical Flash part | Object/part association is Hardware Manager session state |
+| **Program Configuration Memory Device** | Associates MCS/PRM and operation flags with `hw_cfgmem`, then accesses Flash indirectly through the FPGA | Written Flash data persists |
+| **Boot from Configuration Memory Device** | Requests a JTAG-commanded reload from Flash | Warm/commanded boot, not physical power-cycle evidence |
+
+The MT25QU256 is not expected to appear beside the FPGA as another independent
+JTAG device. **Add Configuration Memory Device** tells Vivado which physical
+Flash is wired behind the selected FPGA so it can build the indirect-programming
+flow. If only the programmer/target appears and `xcku3p_0` is absent, this
+attachment cannot be created.
 
 ## Choose an image
 
@@ -202,6 +242,83 @@ Choose the generated `fpga.mcs`, then enable:
 Run **Program Configuration Memory Device** and retain the log showing the
 result of all three operations. A Verify PASS proves the programmed contents can
 be read back; it does not yet prove the board boots from Flash.
+
+## Equivalent Hardware Manager Tcl
+
+The GUI operations above correspond to the following Tcl structure. Replace
+the example paths, and stop immediately if no FPGA device is returned:
+
+```tcl
+open_hw_manager
+connect_hw_server -url localhost:3121 -allow_non_jtag
+set target [lindex [get_hw_targets] 0]
+current_hw_target $target
+set_property PARAM.FREQUENCY 6000000 $target
+open_hw_target
+
+set dev [lindex [get_hw_devices xcku3p*] 0]
+if {$dev eq ""} { error "xcku3p device not found" }
+current_hw_device $dev
+refresh_hw_device -update_hw_probes false $dev
+
+set_property PROGRAM.FILE {C:/path/to/fpga.bit} $dev
+# For a debug build, replace the preceding BIT and use its matching LTX:
+# set_property PROGRAM.FILE {C:/path/to/fpga_debug.bit} $dev
+# set_property PROBES.FILE {C:/path/to/fpga_debug.ltx} $dev
+# set_property FULL_PROBES.FILE {C:/path/to/fpga_debug.ltx} $dev
+program_hw_devices $dev
+refresh_hw_device $dev
+
+set part [lindex [get_cfgmem_parts {mt25qu256-spi-x1_x2_x4}] 0]
+if {$part eq ""} { error "MT25QU256 cfgmem part not found" }
+set cfg [create_hw_cfgmem -hw_device $dev -mem_dev $part]
+set_property PROGRAM.ADDRESS_RANGE {use_file} $cfg
+set_property PROGRAM.FILES [list {C:/path/to/fpga.mcs}] $cfg
+set_property PROGRAM.PRM_FILE {C:/path/to/fpga.prm} $cfg
+set_property PROGRAM.ERASE 1 $cfg
+set_property PROGRAM.CFG_PROGRAM 1 $cfg
+set_property PROGRAM.VERIFY 1 $cfg
+program_hw_devices $dev
+program_hw_cfgmem -hw_cfgmem $cfg
+```
+
+For a normal BIT with no debug cores, omit the two probes properties rather
+than pointing them at an unrelated LTX. If multiple cables or targets exist,
+select the intended result from `get_hw_targets` instead of assuming index zero.
+
+The second `program_hw_devices` in the Flash flow loads the temporary FPGA
+configuration Vivado needs to access the attached cfgmem. It is not evidence
+that the final project BIT has passed its runtime acceptance tests.
+
+`boot_hw_device $dev` may be used after programming for a commanded reload.
+Retain that result separately from the required test that removes board power
+and verifies autonomous Master-SPI/QSPI boot.
+
+## What must be re-associated in a new session
+
+Treat Hardware Manager associations as per-session state. After closing Vivado,
+closing the target, restarting `hw_server`, or reconnecting the cable, repeat as
+needed:
+
+1. connect to `hw_server`;
+2. select/open the intended hardware target and set its JTAG frequency;
+3. select `xcku3p_0` as the current hardware device;
+4. reselect the BIT and, for a debug build, its matching LTX;
+5. recreate/attach the MT25QU256 `hw_cfgmem` object;
+6. reselect the MCS and matching PRM;
+7. re-enable Erase, Program, and Verify for a new Flash operation.
+
+The following items persist independently of the Vivado session:
+
+- bytes already written into the MT25QU256;
+- the board's physical boot-mode straps/resistors;
+- BIT/LTX/MCS/PRM files stored on disk;
+- saved logs, hashes, screenshots, and enumeration evidence.
+
+A reopened Hardware Manager may report that the FPGA is already programmed,
+but that does not guarantee the previous BIT path, probes path, cfgmem object,
+MCS/PRM association, or programming options were restored. Recheck them before
+each operation.
 
 ## Verify power-cycle boot and PCIe enumeration
 

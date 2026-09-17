@@ -45,6 +45,10 @@ Open **Hardware Manager → Open Target → Auto Connect**. Required evidence:
 - the hardware target/programmer is visible;
 - `xcku3p_0` appears in the device tree or `get_hw_devices` output.
 
+The programmer/debug channel is the `hw_target`; `xcku3p_0` is a separate
+`hw_device` discovered beneath it. Seeing the target without the device is not
+a usable FPGA programming connection.
+
 If only the programmer appears or Vivado reports **No devices detected**, stop
 image testing and investigate board power, VREF, ground, TDI/TDO direction,
 wire order, cable connection, TCK rate, and `hw_server` state.
@@ -62,6 +66,10 @@ this order:
 2. Load this project's normal `fpga.bit` and record its behavior.
 3. Use `fpga_debug.bit` plus its matching `fpga_debug.ltx` only when ILA/VIO
    observation is needed.
+
+BIT and LTX paths are explicit Hardware Manager associations. Recheck them after
+opening a new Vivado/hw_server session; do not assume a previous selection was
+restored.
 
 The external baseline is a local diagnostic input, not a repository release
 asset. Its recorded SHA-256 is:
@@ -88,6 +96,12 @@ Only after the intended normal BIT works temporarily:
 4. Reject dual-stacked, dual-parallel/x8, BPI, and wrong-capacity entries.
 5. Program the MCS with **Erase**, **Program**, and **Verify** enabled.
 6. Save the selected part, operation log, source BIT hash, and MCS/PRM hashes.
+
+**Add Configuration Memory Device** creates a session-local `hw_cfgmem` object
+under `xcku3p_0`; it does not discover the Flash as a second JTAG device. In a
+new Hardware Manager session, attach the part again and reselect the matching
+MCS/PRM and operation flags. The Flash contents persist, while those Vivado
+object/file associations may not.
 
 Then remove and restore board power with the boot mode set for Master SPI/QSPI.
 Automatic configuration after power-cycle is a separate required result; Flash
