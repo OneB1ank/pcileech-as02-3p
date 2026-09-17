@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.1.1 - 2026-09-17
+
+- Make the reusable-framework SHA-256 audit stable across LF and CRLF Git checkouts.
+- Preserve the audited RTL content while hashing its normalized UTF-8/LF representation.
+
 ## v0.1.0 - 2026-09-17
 
 - Initial public source release for AS02MC04/XCKU3P.

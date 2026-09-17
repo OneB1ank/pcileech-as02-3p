@@ -99,10 +99,16 @@ foreach ($Needle in @('IfComToFifo', '64-bit RX', '256-bit TX')) {
     if ($Udp.IndexOf($Needle, [System.StringComparison]::OrdinalIgnoreCase) -lt 0) { throw "UDP/IfComToFifo contract is missing: $Needle" }
 }
 
-# Reusable framework files must remain byte-identical to the published migration baseline.
+# Reusable framework files must remain content-identical to the published
+# migration baseline. Normalize text line endings so the audit is stable on
+# Windows and Linux checkouts without rewriting the preserved RTL.
 $ReuseManifest = Get-Content -LiteralPath $ReuseManifestPath -Raw | ConvertFrom-Json
-if ($ReuseManifest.schema -ne 'as02-framework-reuse-v1') { throw "Unsupported reuse manifest schema" }
+if ($ReuseManifest.schema -ne 'as02-framework-reuse-v2' -or
+    $ReuseManifest.hash_mode -ne 'utf8-lf-sha256') {
+    throw "Unsupported reuse manifest schema or hash mode"
+}
 $Sha256 = [System.Security.Cryptography.SHA256]::Create()
+$Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 try {
     foreach ($Item in $ReuseManifest.files) {
         $RelativePath = [string]$Item.path
@@ -110,9 +116,11 @@ try {
         if (-not (Test-Path -LiteralPath $SourcePath -PathType Leaf)) {
             throw "AS02 reusable source is absent: $RelativePath"
         }
-        $ActualHash = [System.BitConverter]::ToString(
-            $Sha256.ComputeHash([System.IO.File]::ReadAllBytes($SourcePath))
-        ).Replace('-', '')
+        $NormalizedText = [System.IO.File]::ReadAllText($SourcePath).
+            Replace("`r`n", "`n").Replace("`r", "`n")
+        $ActualHash = [System.BitConverter]::ToString($Sha256.ComputeHash(
+            $Utf8NoBom.GetBytes($NormalizedText)
+        )).Replace('-', '')
         if ($ActualHash -ne ([string]$Item.sha256).ToUpperInvariant()) {
             throw "Reusable source drifted from published baseline: $RelativePath"
         }
