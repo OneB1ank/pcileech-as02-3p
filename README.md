@@ -12,6 +12,24 @@ Vivado 2024.2 project that ports the asmcehnk/PCILeech-compatible FPGA framework
 - The PCIe endpoint and the controller-side 25G NIC are independent. The NIC address is only for ARP/IPv4/UDP transport.
 - Vivado Tcl is the authoritative build flow; GNU Make is not required.
 
+## Based on and referenced projects
+
+This repository combines several projects at different boundaries; it is not an
+unchanged fork of any one of them.
+
+| Project | Role in this port |
+| --- | --- |
+| [PCILeech-FPGA](https://github.com/ufrisk/pcileech-fpga) | FPGA/raw-TLP protocol lineage and PCIe profile reference. |
+| [NeTV2](https://github.com/ufrisk/pcileech-fpga/tree/master/NeTV2) | RawUDP wire-format and host-behavior reference; its RMII/A7 board design is not used. |
+| Local AMDUSB4/asmcehnk snapshot | Functional baseline for the preserved FIFO/mux/BAR/config-shadow/raw-128 framework. |
+| [Taxi AS02MC04](https://github.com/fpganinja/taxi/tree/master/src/cndm/board/AS02MC04/fpga) | AS02 board shell, constraints, clocks, GTY, 25G MAC/PHY, I2C and CDC helpers. |
+| [Corundum](https://github.com/corundum/corundum) and [Nexus K3P-S 25G](https://github.com/corundum/corundum/tree/master/fpga/mqnic/Nexus_K3P_S/fpga_25g) | Minimal generic Ethernet/ARP/IPv4/UDP RTL plus KU3P/25G design reference; mqnic/DMA is not imported. |
+| [LeechCore](https://github.com/ufrisk/LeechCore) | Host-side API and RawUDP transport selection. |
+
+See [Upstream projects and provenance](docs/upstream-and-provenance.md) for
+pinned revisions, reused modules, excluded subsystems, licenses, and the exact
+boundary between inherited and project-specific work.
+
 ## Repository layout
 
 - `as02_asmcehnk_25g/src/` — top-level RTL, UDP transport, PCIe adapters, reused framework.
@@ -75,6 +93,7 @@ current task, or use the complete [documentation index](docs/index.md).
 | [Board bring-up](docs/board-bringup.md) | Execute the ordered PCIe → SFP1 → RawUDP → LeechCore hardware gates. |
 | [LeechCore adapter](docs/leechcore-adapter.md) | Build/deploy the DLL and use plain `fpga` with the default RawUDP endpoint. |
 | [Architecture](docs/architecture.md) | Understand reuse boundaries, clock domains, and 128/256-bit PCIe adaptation. |
+| [Upstream projects and provenance](docs/upstream-and-provenance.md) | See which projects supplied code, behavior, board knowledge, or host contracts. |
 | [Validation status](docs/validation.md) | Separate completed simulation/build evidence from open physical-board gates. |
 | [Migration plan](docs/migration-plan.md) | Read the detailed historical migration and compatibility record. |
 

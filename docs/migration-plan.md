@@ -4,6 +4,16 @@
 > 本地复核报告路径属于未随公开源码发布的历史证据；当前可复现状态与开放
 > 实板门槛以 [validation.md](validation.md) 为准。
 
+上游和参考项目的稳定链接、固定提交、实际使用范围与许可证边界统一记录在
+[Upstream projects and provenance](upstream-and-provenance.md)。核心来源包括
+[PCILeech-FPGA](https://github.com/ufrisk/pcileech-fpga)、其中的
+[NeTV2](https://github.com/ufrisk/pcileech-fpga/tree/master/NeTV2)、
+[Taxi AS02MC04](https://github.com/fpganinja/taxi/tree/master/src/cndm/board/AS02MC04/fpga)、
+[Corundum](https://github.com/corundum/corundum) 的通用网络 RTL 与
+[Nexus K3P-S 25G](https://github.com/corundum/corundum/tree/master/fpga/mqnic/Nexus_K3P_S/fpga_25g)
+器件参考，以及 [LeechCore](https://github.com/ufrisk/LeechCore)。AMDUSB4 在
+本项目中是本地工程基线，尚无已核实的独立公开上游 URL，因此不虚构链接。
+
 ## 1. 目标与不可变约束
 
 把 **AMDUSB4 的 asmcehnk 工程移植到 AS02MC04**，只替换板卡、传输和 PCIe IP 边界。目标器件为 `xcku3p-ffvb676-2-e`，构建工具为 Vivado 2024.2。

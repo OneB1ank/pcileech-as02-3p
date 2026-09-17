@@ -19,5 +19,6 @@ work. Read only the topic needed for the current task.
 ## Engineering reference
 
 - [Architecture](architecture.md) — data paths, clock domains, PCIe format boundaries, and the asmcehnk reuse rule. Read before changing RTL interfaces.
+- [Upstream projects and provenance](upstream-and-provenance.md) — PCILeech-FPGA, NeTV2, AMDUSB4, Taxi, Corundum, and LeechCore roles, links, pinned revisions, exclusions, and licenses. Read before changing dependency or attribution text.
 - [Validation status](validation.md) — passed evidence and remaining hardware work. Read before making a readiness claim.
 - [Migration plan](migration-plan.md) — detailed historical engineering record. Read when tracing migration decisions or unfinished compatibility work.
