@@ -4,8 +4,12 @@ Use the gates in order and retain evidence from each gate. A later gate does not
 
 ## 1. Program and enumerate
 
-- Program `fpga.bit` through JTAG.
-- For reliable cold enumeration, ensure the FPGA image is configured before or during host reset.
+- Follow [Vivado programming](vivado-programming.md) to choose a normal or debug
+  image, associate a matching LTX when required, and program `xcku3p_0` through
+  JTAG.
+- For reliable cold enumeration, keep the FPGA configured before or during host
+  reset. A Device Manager refresh alone may not retrain and re-enumerate the
+  endpoint.
 - Confirm the endpoint, negotiated width/rate, BAR0, and configuration capabilities.
 
 The tracked PCIe profile is `10EE:0666`, class `0C0340`, 4 KiB 32-bit BAR0, MSI enabled, MSI-X disabled.
@@ -29,6 +33,9 @@ Expected marker: `AS02_SFP1_NETWORK_TEST_PASS`. The test verifies 25G link state
 Build or copy the AS02 `leechcore.dll` beside the x64 host application. Continue using the device string `fpga`; the AS02 build defaults it to RawUDP `192.168.0.222:28474`.
 
 Start with identity and a small read, then progress to repeated reads/writes and sustained traffic. Record host output and packet captures.
+
+See [LeechCore adapter](leechcore-adapter.md) for the builder outputs, deployment
+layout, default/explicit device strings, and mock-test boundary.
 
 ## 4. Evidence
 

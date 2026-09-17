@@ -21,6 +21,17 @@ vivado -mode batch -source .\vivado_build.tcl -notrace
 
 The generator imports the source-controlled PCIe4 XCI, reusable FIFO/BRAM XCI files, Taxi RTL/Tcl, and the minimal Corundum network files. It removes unused standard-latency PHY IP before implementation.
 
+With the example `AS02_PROJECT_DIR`, the normal programming outputs are:
+
+- `.build/release/fpga.runs/impl_1/fpga.bit`
+- `.build/release/fpga.runs/impl_1/fpga.bin`
+
+The project is `.build/release/fpga.xpr`. For an ILA-enabled build, run
+`vivado -mode batch -source .\vivado_build_debug_as02.tcl -notrace`; it writes
+`fpga_debug.bit`, `fpga_debug.bin`, and `fpga_debug.ltx` in
+`as02_asmcehnk_25g/`. Continue with [Vivado programming](vivado-programming.md)
+to choose and load the correct image.
+
 ## Regression groups
 
 On a fresh clone, run the Vivado build before the complete PCIe regression. The

@@ -42,17 +42,10 @@ vivado -mode batch -source .\vivado_build.tcl -notrace
 
 The bitstream is generated below the selected project directory in `fpga.runs/impl_1/`. Timing failure blocks bitstream generation.
 
-## Run focused tests
-
-```powershell
-cd .\as02_asmcehnk_25g
-.\run_as02_pcie_tests.ps1
-.\run_as02_udp_tests.ps1
-.\run_as02_framework_tests.ps1
-.\run_as02_pcie_profile_tests.ps1
-python -m unittest -v tests.test_as02_udp_stress
-pwsh -File .\tests\test_transport_identity_reuse.ps1
-```
+The release image is written to
+`as02_asmcehnk_25g/.build/release/fpga.runs/impl_1/fpga.bit`. See
+[Build and test](docs/build-and-test.md) for the regression groups and
+[Vivado programming](docs/vivado-programming.md) before loading the image.
 
 ## Build the modified LeechCore adapter
 
@@ -65,22 +58,25 @@ cd .\as02_asmcehnk_25g\host\leechcore
 .\run_as02_leechcore_api_test.ps1
 ```
 
-Deploy the produced `leechcore.dll` beside the x64 host application. Existing applications may continue using `-device fpga`.
+Deploy the produced `leechcore.dll` beside the x64 host application. Existing
+applications may continue using `-device fpga`. See
+[LeechCore adapter](docs/leechcore-adapter.md) for outputs, tests, and the
+real-hardware boundary.
 
-## Hardware bring-up summary
+## Documentation map
 
-1. Program the FPGA and cold-boot/rescan the PCIe host.
-2. Confirm the endpoint identity, BAR0, link width, and link rate.
-3. Connect the controller 25G NIC to physical SFP1 and assign an unused address in `192.168.0.0/24` (for example `192.168.0.10/24`).
-4. Run `test_as02_sfp1.ps1 -InterfaceAlias '<25G NIC>'`.
-5. Run the host/VMM with the AS02 `leechcore.dll` and plain `fpga`.
-6. Archive NIC counters, packet capture, PCIe enumeration, and optional ILA/VIO data with `collect_as02_evidence.ps1`.
+The main README is intentionally brief. Start with the topic needed for the
+current task, or use the complete [documentation index](docs/index.md).
 
-See [docs/board-bringup.md](docs/board-bringup.md) for the complete gate sequence.
-
-## Documentation
-
-Start with [docs/index.md](docs/index.md). The detailed historical migration plan is preserved at [docs/migration-plan.md](docs/migration-plan.md).
+| Topic | Purpose |
+| --- | --- |
+| [Build and test](docs/build-and-test.md) | Create normal/debug images and run focused regression groups. |
+| [Vivado programming](docs/vivado-programming.md) | Connect JTAG, associate BIT/LTX files, program `xcku3p_0`, and handle PCIe re-enumeration. |
+| [Board bring-up](docs/board-bringup.md) | Execute the ordered PCIe → SFP1 → RawUDP → LeechCore hardware gates. |
+| [LeechCore adapter](docs/leechcore-adapter.md) | Build/deploy the DLL and use plain `fpga` with the default RawUDP endpoint. |
+| [Architecture](docs/architecture.md) | Understand reuse boundaries, clock domains, and 128/256-bit PCIe adaptation. |
+| [Validation status](docs/validation.md) | Separate completed simulation/build evidence from open physical-board gates. |
+| [Migration plan](docs/migration-plan.md) | Read the detailed historical migration and compatibility record. |
 
 ## Licensing
 
